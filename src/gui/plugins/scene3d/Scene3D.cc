@@ -58,6 +58,8 @@
 #include "ignition/gazebo/EntityComponentManager.hh"
 #include "ignition/gazebo/gui/GuiEvents.hh"
 #include "ignition/gazebo/rendering/RenderUtil.hh"
+#include "ignition/gazebo/Types.hh"
+#include "ignition/gazebo/Conversions.hh"
 
 #include "Scene3D.hh"
 
@@ -305,6 +307,9 @@ inline namespace IGNITION_GAZEBO_VERSION_NAMESPACE {
 
     /// \brief The scale values by which to snap the object.
     public: math::Vector3d scaleSnap = math::Vector3d::One;
+
+    /// \brief Latest world statistics
+    public: UpdateInfo info;
   };
 
   /// \brief Private data class for RenderWindowItem
@@ -433,6 +438,18 @@ void IgnRenderer::Render()
 
   // record video is requested
   {
+    static bool subscribeWorldStats = false;
+    if (!subscribeWorldStats){
+      std::string topic = "/world/shapes/state";
+      if (!this->dataPtr->node.Subscribe(topic, &IgnRenderer::OnStateMsg, this))
+      {
+        ignerr << "Failed to subscribe to [" << topic << "]" << std::endl;
+        return;
+      }
+      ignmsg << "Subscribing to " << topic << std::endl;
+      subscribeWorldStats = true;
+    }
+    static std::optional<std::chrono::steady_clock::time_point> recordStartTime = std::nullopt;
     IGN_PROFILE("IgnRenderer::Render Record Video");
     if (this->dataPtr->recordVideo)
     {
@@ -448,20 +465,36 @@ void IgnRenderer::Render()
       // Video recorder is on. Add more frames to it
       if (this->dataPtr->videoEncoder.IsEncoding())
       {
-        this->dataPtr->camera->Copy(this->dataPtr->cameraImage);
-        this->dataPtr->videoEncoder.AddFrame(
-            this->dataPtr->cameraImage.Data<unsigned char>(), width, height);
+        if (recordStartTime == std::nullopt){
+          recordStartTime = std::chrono::steady_clock::now();
+        }
+
+        if (this->dataPtr->info.simTime.count() > 0) {
+          std::chrono::steady_clock::time_point currentTime;
+          currentTime = recordStartTime.value() + this->dataPtr->info.simTime;
+          this->dataPtr->camera->Copy(this->dataPtr->cameraImage);
+          this->dataPtr->videoEncoder.AddFrame(
+                  this->dataPtr->cameraImage.Data<unsigned char>(), width, height, currentTime);
+          ignmsg << "Adding frame with time " << currentTime.time_since_epoch().count() << std::endl;
+        }
+        else{
+//          this->dataPtr->camera->Copy(this->dataPtr->cameraImage);
+//          this->dataPtr->videoEncoder.AddFrame(
+//                  this->dataPtr->cameraImage.Data<unsigned char>(), width, height);
+          ignwarn << "No sim time in world state message" << std::endl;
+        }
       }
       // Video recorder is idle. Start recording.
       else
       {
         this->dataPtr->videoEncoder.Start(this->dataPtr->recordVideoFormat,
-            this->dataPtr->recordVideoSavePath, width, height);
+            this->dataPtr->recordVideoSavePath, width, height, 100);
       }
     }
     else if (this->dataPtr->videoEncoder.IsEncoding())
     {
       this->dataPtr->videoEncoder.Stop();
+      recordStartTime = std::nullopt;
     }
   }
 
@@ -861,6 +894,12 @@ void IgnRenderer::HandleKeyRelease(QKeyEvent *_e)
     default:
       break;
   }
+}
+
+/////////////////////////////////////////////////
+void IgnRenderer::OnStateMsg(const ignition::msgs::SerializedStepMap &_msg)
+{
+  this->dataPtr->info = ignition::gazebo::convert<UpdateInfo>(_msg.stats());
 }
 
 /////////////////////////////////////////////////

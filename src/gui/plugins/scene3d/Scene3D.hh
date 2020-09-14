@@ -22,6 +22,7 @@
 #include <ignition/msgs/stringmsg.pb.h>
 #include <ignition/msgs/vector3d.pb.h>
 #include <ignition/msgs/video_record.pb.h>
+#include <ignition/msgs/serialized_map.pb.h>
 
 #include <string>
 #include <memory>
@@ -257,6 +258,8 @@ inline namespace IGNITION_GAZEBO_VERSION_NAMESPACE {
     /// \param[in] _e The key event to process.
     public: void HandleKeyRelease(QKeyEvent *_e);
 
+    /// \brief Callback for world statistics subscriber
+    private: void OnStateMsg(const ignition::msgs::SerializedStepMap &_msg);
     /// \brief Set the XYZ snap values.
     /// \param[in] _xyz The XYZ snap values
     public: void SetXYZSnap(const math::Vector3d &_xyz);
