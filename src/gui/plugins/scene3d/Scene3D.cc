@@ -440,7 +440,7 @@ void IgnRenderer::Render()
   {
     static bool subscribeWorldStats = false;
     if (!subscribeWorldStats){
-      std::string topic = "/world/shapes/state";
+      std::string topic = "/world/default/state";
       if (!this->dataPtr->node.Subscribe(topic, &IgnRenderer::OnStateMsg, this))
       {
         ignerr << "Failed to subscribe to [" << topic << "]" << std::endl;
